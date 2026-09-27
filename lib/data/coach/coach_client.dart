@@ -65,7 +65,10 @@ class CoachClient {
               continue;
             }
             if (decoded is! Map<String, dynamic>) continue;
-            if (decoded['error'] != null) throw const CoachException('The coach hit a problem answering that.');
+            final error = decoded['error'];
+            if (error != null) {
+              throw CoachException(error is String && error.isNotEmpty ? error : 'The coach hit a problem answering that.');
+            }
             final token = decoded['token'];
             if (token is String && token.isNotEmpty) yield token;
           }

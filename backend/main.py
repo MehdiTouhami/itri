@@ -158,15 +158,28 @@ async def chat_stream(request: Request, body: ChatRequest):
     inputs = _inputs(body)
 
     async def generate():
-        try:
-            async for chunk in request.app.state.chain.astream(inputs):
-                if chunk:
-                    yield f"data: {json.dumps({'token': chunk})}\n\n"
-        except Exception:
-            log.exception("chat-stream failed")  # details stay in the server log
-            yield f"data: {json.dumps({'error': 'The coach hit a problem answering that.'})}\n\n"
-        finally:
-            yield "data: [DONE]\n\n"
+        # Gemini sometimes answers 503 "high demand" (or 429) for a moment.
+        # Retry quietly, but only before anything has been streamed.
+        sent = False
+        for attempt in range(3):
+            try:
+                async for chunk in request.app.state.chain.astream(inputs):
+                    if chunk:
+                        sent = True
+                        yield f"data: {json.dumps({'token': chunk})}\n\n"
+                break
+            except Exception as e:
+                busy = any(s in str(e) for s in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED"))
+                if busy and not sent and attempt < 2:
+                    log.warning("Gemini busy, retrying (attempt %d)", attempt + 1)
+                    await asyncio.sleep(2 + 3 * attempt)
+                    continue
+                log.exception("chat-stream failed")  # details stay in the server log
+                msg = ("Gemini is very busy right now. Try again in a minute."
+                       if busy else "The coach hit a problem answering that.")
+                yield f"data: {json.dumps({'error': msg})}\n\n"
+                break
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         generate(),
