@@ -1,0 +1,13 @@
+# API keys — never commit
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+
+# Vector embeddings live in Qdrant Cloud, not on disk — nothing local to ignore for them.
