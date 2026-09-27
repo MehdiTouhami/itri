@@ -18,11 +18,16 @@ class CoachClient {
 
   final String baseUrl;
 
+  /// Shared secret the backend expects. Comes from the git-ignored
+  /// secrets.json via `./run.sh` (`--dart-define-from-file`), never from code.
+  static const appKey = String.fromEnvironment('COACH_KEY');
+
   /// Streams the reply token by token. [facts] carries the user's exact
   /// numbers; the server grounds the answer in them plus research.
   Stream<String> ask(String message, {List<(String, String)> history = const [], String? facts}) async* {
     final request = http.Request('POST', Uri.parse('$baseUrl/chat-stream'))
       ..headers['Content-Type'] = 'application/json'
+      ..headers.addAll({if (appKey.isNotEmpty) 'X-Itri-Key': appKey})
       ..body = jsonEncode({
         'message': message,
         'history': [for (final (q, a) in history) [q, a]],
@@ -33,8 +38,15 @@ class CoachClient {
     try {
       // The free server sleeps when idle and takes up to a minute to wake.
       final response = await client.send(request).timeout(const Duration(seconds: 90));
-      if (response.statusCode != 200) {
-        throw CoachException('The coach replied with an error (${response.statusCode}).');
+      switch (response.statusCode) {
+        case 200:
+          break;
+        case 401:
+          throw const CoachException('This build has no coach key. Start the app with ./run.sh.');
+        case 429:
+          throw const CoachException("You've asked a lot in a short time. Try again in a few minutes.");
+        default:
+          throw CoachException('The coach replied with an error (${response.statusCode}).');
       }
       var buffer = '';
       await for (final chunk in response.stream.transform(utf8.decoder)) {

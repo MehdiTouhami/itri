@@ -23,3 +23,6 @@ publish_log.txt
 # Secrets
 .env
 *.env
+
+# App key for the coach backend (see run.sh). Never commit.
+secrets.json

@@ -4,17 +4,33 @@ Run with: uvicorn main:app --reload --port 8000
 """
 
 import asyncio
+import hmac
 import json
+import logging
 import os
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
+log = logging.getLogger("itri")
+
 MAX_FACTS_CHARS = 12_000  # ~3k tokens; the app sends far less
+MAX_MESSAGE_CHARS = 2_000
+MAX_HISTORY_CHARS = 4_000  # per past message
+
+# Shared secret the app sends in X-Itri-Key. Unset = open (local development only).
+APP_KEY = os.environ.get("ITRI_APP_KEY", "")
+
+# Per-client and whole-server limits, so a leaked URL can't drain the Gemini quota.
+PER_CLIENT = (20, 600)  # 20 questions per 10 minutes
+GLOBAL = (300, 3600)  # 300 questions per hour across everyone
+_hits: dict[str, deque] = defaultdict(deque)
 
 
 def _collection_seeded(client, name: str, expected: int) -> bool:
@@ -55,15 +71,43 @@ async def lifespan(app: FastAPI):
     seeding.cancel()
 
 
-app = FastAPI(title="Itri Coach", lifespan=lifespan)
+# No public API docs: they would advertise the endpoints.
+app = FastAPI(title="Itri Coach", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
-# CORS — required for Flutter web
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # tighten this in production
-    allow_methods=["POST", "GET"],
-    allow_headers=["*"],
-)
+# The iOS/Android app doesn't need CORS. Only listed web origins (e.g. a future
+# Flutter web build) may call from a browser: ALLOWED_ORIGINS="https://a,https://b".
+_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_methods=["POST"],
+        allow_headers=["Content-Type", "X-Itri-Key"],
+    )
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+
+
+def _allow(bucket: str, limit: int, window: int) -> bool:
+    now = time.monotonic()
+    q = _hits[bucket]
+    while q and now - q[0] > window:
+        q.popleft()
+    if len(q) >= limit:
+        return False
+    q.append(now)
+    return True
+
+
+def guard(request: Request, x_itri_key: str | None = Header(default=None)) -> None:
+    """App key first, then rate limits. Runs before any Gemini call."""
+    if APP_KEY and not hmac.compare_digest(x_itri_key or "", APP_KEY):
+        raise HTTPException(status_code=401, detail="Unauthorised")
+    if not _allow(f"ip:{_client_ip(request)}", *PER_CLIENT) or not _allow("global", *GLOBAL):
+        raise HTTPException(status_code=429, detail="Too many requests. Try again in a few minutes.")
 
 
 class ChatRequest(BaseModel):
@@ -75,11 +119,13 @@ class ChatRequest(BaseModel):
 def _inputs(body: ChatRequest) -> dict:
     if not body.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
+    if len(body.message) > MAX_MESSAGE_CHARS:
+        raise HTTPException(status_code=413, detail="Message too long")
     chat_history = []
     for pair in body.history[-10:]:
         if len(pair) == 2:
-            chat_history.append(HumanMessage(content=pair[0]))
-            chat_history.append(AIMessage(content=pair[1]))
+            chat_history.append(HumanMessage(content=pair[0][:MAX_HISTORY_CHARS]))
+            chat_history.append(AIMessage(content=pair[1][:MAX_HISTORY_CHARS]))
     return {
         "question": body.message,
         "chat_history": chat_history,
@@ -92,17 +138,18 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(guard)])
 async def chat(request: Request, body: ChatRequest):
     inputs = _inputs(body)
     try:
         answer = await request.app.state.chain.ainvoke(inputs)
         return {"reply": answer}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("chat failed")  # details stay in the server log
+        raise HTTPException(status_code=500, detail="The coach hit a problem answering that.")
 
 
-@app.post("/chat-stream")
+@app.post("/chat-stream", dependencies=[Depends(guard)])
 async def chat_stream(request: Request, body: ChatRequest):
     """
     Streaming version of /chat.
@@ -115,8 +162,9 @@ async def chat_stream(request: Request, body: ChatRequest):
             async for chunk in request.app.state.chain.astream(inputs):
                 if chunk:
                     yield f"data: {json.dumps({'token': chunk})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        except Exception:
+            log.exception("chat-stream failed")  # details stay in the server log
+            yield f"data: {json.dumps({'error': 'The coach hit a problem answering that.'})}\n\n"
         finally:
             yield "data: [DONE]\n\n"
 
