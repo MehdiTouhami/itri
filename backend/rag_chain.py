@@ -39,7 +39,21 @@ def _retriever():
         _research_retriever = store.as_retriever(search_kwargs={"k": 3})
     return _research_retriever
 
-llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", temperature=0.7)
+# Main model plus backups: when Google reports a model as overloaded (503),
+# the next one answers instead. Override on the server without a redeploy of
+# code: GEMINI_MODEL="..." and GEMINI_FALLBACKS="a,b".
+PRIMARY_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+FALLBACK_MODELS = [
+    m.strip() for m in os.environ.get("GEMINI_FALLBACKS", "gemini-3.7-flash,gemini-3.5-flash-lite").split(",") if m.strip()
+]
+
+
+def _model(name: str) -> ChatGoogleGenerativeAI:
+    # Fail fast (one retry) so a busy model hands over quickly.
+    return ChatGoogleGenerativeAI(model=name, max_retries=1)
+
+
+llm = _model(PRIMARY_MODEL).with_fallbacks([_model(m) for m in FALLBACK_MODELS])
 
 SYSTEM_PROMPT = """You are Itri, the coach inside the Itri app, which covers both training and recovery (sleep, HRV, resting heart rate).
 

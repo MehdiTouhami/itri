@@ -87,7 +87,8 @@ On boot the server compares the `research_papers` collection with the paper list
 
 - The Gemini and Qdrant keys exist only as environment variables on the server. They are not in the app or the repo.
 - The coach endpoints require an app key (`X-Itri-Key`, server env `ITRI_APP_KEY`). The app reads it from the git-ignored `secrets.json` via `./run.sh` (`--dart-define-from-file`). A key shipped inside an app can be extracted, so this keeps casual traffic out rather than being real user auth; per-user sign-in comes before any public release.
-- Rate limits: 20 questions per 10 minutes per device, 300 per hour in total. Messages are capped at 2,000 characters.
+- Rate limits: 20 questions per 10 minutes per device, 300 per hour in total.
+- Resilience: if Gemini reports a model as overloaded, the coach falls back to `gemini-3.7-flash`, then `gemini-3.5-flash-lite` (set `GEMINI_MODEL` / `GEMINI_FALLBACKS` on the server to change them), and retries briefly before telling the user. Messages are capped at 2,000 characters.
 - No CORS unless `ALLOWED_ORIGINS` is set; API docs are disabled; errors reach the app as a generic message and the details stay in the server log.
 - The intervals.icu key lives in the iOS Keychain.
 
