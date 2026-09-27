@@ -92,6 +92,17 @@ On boot the server compares the `research_papers` collection with the paper list
 - No CORS unless `ALLOWED_ORIGINS` is set; API docs are disabled; errors reach the app as a generic message and the details stay in the server log.
 - The intervals.icu key lives in the iOS Keychain.
 
+### Privacy
+
+- **On the phone:** the intervals.icu key (Keychain), synced sessions and nights (app-private storage), coach consent. Profile → Live sync → Disconnect deletes the key and the synced copy.
+- **Sent to the coach:** a summary of recent training and sleep numbers (dates, sports, heart rate, load, sleep scores, HRV). No name, location, GPS or body weight. The server forwards it to Gemini and stores nothing.
+- **Gemini:** on the free tier Google may use prompts and answers to improve its products, and people may review them; its terms ask users not to send personal information there. The app says so and asks for consent before the first question. Any use beyond a personal demo should use the paid tier, where Google doesn't use the data.
+- Before anyone else's data goes through Itri: a privacy policy, a lawful basis for processing health data (special-category data under UK GDPR), and in-app data export/deletion.
+
+### Not medical advice
+
+The coach and the readiness verdict are informational. They can be wrong, and they don't diagnose anything. For symptoms, illness or injury, see a doctor or physio.
+
 ## Structure
 
 ```
@@ -141,3 +152,7 @@ The UI never touches the data source directly. It reads `ActivityRepository`. On
 - Fonts: Barlow Condensed for numbers, IBM Plex Sans for text, IBM Plex Mono for labels and data. They're bundled under `assets/fonts` (OFL).
 - The zone palette was checked for colour-blind separation. Zones always carry a Z1–Z5 label as well as a colour.
 - Sections are separated by hairlines, not cards. One drag scrubs every telemetry chart and the route marker together.
+
+## Licence
+
+Copyright © 2026 Mehdi Touhami. All rights reserved. The code is public to be read and reviewed; it may not be copied, modified or reused without written permission. See [LICENSE](LICENSE).

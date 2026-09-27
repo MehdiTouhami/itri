@@ -15,6 +15,7 @@ void main() {
         garminBundleProvider.overrideWith((ref) => const AsyncData<GarminBundle?>(null)),
         intervalsKeyStoreProvider.overrideWith((ref) => MemoryKeyStore()),
         liveFileProvider.overrideWith((ref) => MemoryLiveFile()),
+        coachConsentStoreProvider.overrideWith((ref) => MemoryKeyStore()),
       ],
       child: const ItriFitnessApp(),
     ));
@@ -30,6 +31,14 @@ void main() {
     await tester.tap(find.text('SPORTS').last);
     await tester.pumpAndSettle();
     expect(find.text('Where your time goes'.toUpperCase()), findsOneWidget);
+
+    // Coach: nothing can be sent until the notice is accepted.
+    await tester.tap(find.text('COACH').last);
+    await tester.pumpAndSettle();
+    expect(find.text('I UNDERSTAND'), findsOneWidget);
+    await tester.tap(find.text('I UNDERSTAND'));
+    await tester.pumpAndSettle();
+    expect(find.text('Try asking'.toUpperCase()), findsOneWidget);
 
     // Profile moved to the header button.
     await tester.tap(find.byIcon(Icons.person_outline_rounded).last);

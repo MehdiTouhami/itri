@@ -22,6 +22,14 @@ class CoachClient {
   /// secrets.json via `./run.sh` (`--dart-define-from-file`), never from code.
   static const appKey = String.fromEnvironment('COACH_KEY');
 
+  /// Starts waking the free server (it sleeps when idle) so the first question
+  /// doesn't wait. Fire and forget; failures don't matter.
+  Future<void> wake() async {
+    try {
+      await http.get(Uri.parse('$baseUrl/health'));
+    } catch (_) {}
+  }
+
   /// Streams the reply token by token. [facts] carries the user's exact
   /// numbers; the server grounds the answer in them plus research.
   Stream<String> ask(String message, {List<(String, String)> history = const [], String? facts}) async* {

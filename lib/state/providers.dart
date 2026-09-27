@@ -344,3 +344,25 @@ String syncedAgo(DateTime? at, {DateTime? now}) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return '${at.day} ${months[at.month - 1]}';
 }
+
+// ─── Coach consent ──────────────────────────────────────────────────────
+
+final coachConsentStoreProvider = Provider<KeyStore>((ref) => const SecureKeyStore('coach_consent'));
+
+/// Whether the user has read what the coach sends to Gemini, and that it is
+/// not medical advice. Nothing is sent before this is true.
+class CoachConsentNotifier extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() async => await ref.watch(coachConsentStoreProvider).read() == 'yes';
+
+  Future<void> accept() async {
+    state = const AsyncData(true);
+    try {
+      await ref.read(coachConsentStoreProvider).write('yes');
+    } catch (_) {
+      // Not persisted: the notice shows again next launch, which is harmless.
+    }
+  }
+}
+
+final coachConsentProvider = AsyncNotifierProvider<CoachConsentNotifier, bool>(CoachConsentNotifier.new);

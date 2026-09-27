@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/format.dart';
+import '../data/coach/coach_client.dart';
 import '../core/theme/tokens.dart';
 import '../state/providers.dart';
 
@@ -22,6 +26,8 @@ class _LiveSyncHostState extends ConsumerState<LiveSyncHost> with WidgetsBinding
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _sync());
+    // Wake the coach server now, so it's up by the time the Coach tab opens.
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) unawaited(CoachClient().wake());
   }
 
   @override

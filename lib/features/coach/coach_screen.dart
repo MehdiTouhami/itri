@@ -62,7 +62,11 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
 
   Future<void> _send(String raw) async {
     final text = raw.trim();
-    if (text.isEmpty || _busy) return;
+    final consented = switch (ref.read(coachConsentProvider)) {
+      AsyncData(:final value) => value,
+      _ => false,
+    };
+    if (text.isEmpty || _busy || !consented) return;
     final facts = ref.read(factsProvider);
 
     final history = <(String, String)>[];
@@ -108,6 +112,10 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
   Widget build(BuildContext context) {
     final t = context.tk;
     final ready = ref.watch(factsProvider) != null;
+    final consented = switch (ref.watch(coachConsentProvider)) {
+      AsyncData(:final value) => value,
+      _ => false,
+    };
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -123,7 +131,9 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
               ),
             ),
             Expanded(
-              child: _messages.isEmpty
+              child: !consented
+                  ? _Consent(onAccept: () => ref.read(coachConsentProvider.notifier).accept())
+                  : _messages.isEmpty
                   ? _Intro(onAsk: _send, debrief: _debrief, starters: _starters)
                   : ListView.builder(
                       controller: _scroll,
@@ -132,7 +142,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
                       itemBuilder: (context, i) => _Bubble(_messages[i]),
                     ),
             ),
-            _InputBar(controller: _input, busy: _busy, onSend: _send),
+            if (consented) _InputBar(controller: _input, busy: _busy, onSend: _send),
           ],
         ),
       ),
@@ -200,6 +210,51 @@ class _Intro extends StatelessWidget {
               ),
             ),
           ),
+        const SizedBox(height: Sp.lg),
+        Text(
+          'Not medical advice. For symptoms, illness or injury, see a doctor or physio.',
+          style: Tx.small(t, color: t.textFaint),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shown once, before anything is sent: what leaves the phone, where it goes,
+/// and that the coach is not a clinician.
+class _Consent extends StatelessWidget {
+  const _Consent({required this.onAccept});
+  final VoidCallback onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tk;
+    Widget para(String s) => Padding(
+          padding: const EdgeInsets.only(bottom: Sp.md),
+          child: Text(s, style: Tx.body(t, color: t.textMuted)),
+        );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(Sp.gutter, 0, Sp.gutter, Sp.xl),
+      children: [
+        Eyebrow('Before you ask', color: t.gold),
+        const SizedBox(height: Sp.md),
+        para('To answer, Itri sends your recent training and sleep numbers to Google Gemini: dates, sports, '
+            'heart rate, load, sleep scores and HRV. Not your name, your location or any GPS. Itri\'s own server '
+            'passes them on and keeps nothing.'),
+        para('On Gemini\'s free tier, Google may use what it receives to improve its products, and people may '
+            'review it. Don\'t type anything into the coach you wouldn\'t want seen.'),
+        para('The coach is not medical advice and can be wrong. For symptoms, illness, injury or anything that '
+            'worries you, talk to a doctor or physio.'),
+        const SizedBox(height: Sp.sm),
+        Pressable(
+          onTap: onAccept,
+          child: Container(
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: t.text, borderRadius: BorderRadius.circular(4)),
+            child: Text('I UNDERSTAND', style: Tx.eyebrow(t, color: t.ground)),
+          ),
+        ),
       ],
     );
   }

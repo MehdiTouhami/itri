@@ -1,0 +1,11 @@
+Copyright (c) 2026 Mehdi Touhami. All rights reserved.
+
+This repository is public so that its code can be read and reviewed. No licence
+is granted to copy, modify, merge, publish, distribute, sublicense, sell or
+otherwise use this software or any part of it, for any purpose, without the
+prior written permission of the copyright holder.
+
+Third-party components keep their own licences. The fonts in assets/fonts are
+under the SIL Open Font License (see the OFL files in that folder). The packages
+listed in pubspec.yaml and backend/requirements.txt are under their respective
+licences.

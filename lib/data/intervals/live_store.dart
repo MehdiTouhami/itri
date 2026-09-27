@@ -13,14 +13,14 @@ abstract interface class KeyStore {
 
 /// iOS Keychain / Android Keystore.
 class SecureKeyStore implements KeyStore {
-  const SecureKeyStore();
-  static const _key = 'intervals_api_key';
+  const SecureKeyStore([this.key = 'intervals_api_key']);
+  final String key;
   static const _storage = FlutterSecureStorage();
 
   @override
   Future<String?> read() async {
     try {
-      return await _storage.read(key: _key);
+      return await _storage.read(key: key);
     } catch (_) {
       return null; // no keychain (tests, unsupported platform)
     }
@@ -28,7 +28,7 @@ class SecureKeyStore implements KeyStore {
 
   @override
   Future<void> write(String? value) =>
-      value == null ? _storage.delete(key: _key) : _storage.write(key: _key, value: value);
+      value == null ? _storage.delete(key: key) : _storage.write(key: key, value: value);
 }
 
 class MemoryKeyStore implements KeyStore {

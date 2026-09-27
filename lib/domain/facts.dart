@@ -23,7 +23,7 @@ String buildFacts({
   final b = StringBuffer()
     ..writeln('YOUR DATA (as of ${_d(asOf)}). These figures are exact. Do not invent others.')
     ..writeln()
-    ..writeln('PROFILE: max HR ${athlete.maxHr}, resting HR ${athlete.restHr}, weight ${athlete.weightKg} kg.');
+    ..writeln('PROFILE: max HR ${athlete.maxHr}, resting HR ${athlete.restHr}.');
 
   if (readiness != null) {
     b
